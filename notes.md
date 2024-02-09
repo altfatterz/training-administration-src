@@ -170,6 +170,183 @@ $ curl -s -X POST \
 $ curl http://kafka-connect:8083/connectors | jq .
 ```
 
+### Producer performance
+
+### What is the maximum throughput, no matter the latency?
+
+(56.87 MB/sec) ??
+
+```bash
+$ kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=600000 linger.ms=700 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+
+1000000 records sent, 596302.921884 records/sec (56.87 MB/sec), 16.07 ms avg latency, 453.00 ms max latency, 13 ms 50th, 40 ms 95th, 50 ms 99th, 60 ms 99.9th.
+producer-metrics:batch-size-avg:{client-id=perf-producer-client}                                                   : 552760.819
+producer-metrics:bufferpool-wait-ratio:{client-id=perf-producer-client}                                            : 0.000
+producer-metrics:outgoing-byte-rate:{client-id=perf-producer-client}                                               : 3498665.596
+producer-metrics:record-queue-time-avg:{client-id=perf-producer-client}                                            : 7.427
+producer-metrics:request-latency-avg:{client-id=perf-producer-client}                                              : 11.044
+```
+
+### What is the minimum latency, no matter the throughput?
+
+18.78 ms avg latency ?
+
+```bash
+kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=16384 linger.ms=0 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+
+1000000 records sent, 247279.920870 records/sec (23.58 MB/sec), 443.17 ms avg latency, 826.00 ms max latency, 454 ms 50th, 765 ms 95th, 793 ms 99th, 819 ms 99.9th.
+producer-metrics:batch-size-avg:{client-id=perf-producer-client}                                                   : 16218.913
+producer-metrics:bufferpool-wait-ratio:{client-id=perf-producer-client}                                            : 0.000
+producer-metrics:outgoing-byte-rate:{client-id=perf-producer-client}                                               : 3258388.986
+producer-metrics:record-queue-time-avg:{client-id=perf-producer-client}                                            : 426.978
+producer-metrics:request-latency-avg:{client-id=perf-producer-client}                                              : 14.475
+```
+
+```bash
+kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=200000 linger.ms=0 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+
+1000000 records sent, 384319.754035 records/sec (36.65 MB/sec), 18.78 ms avg latency, 413.00 ms max latency, 14 ms 50th, 46 ms 95th, 55 ms 99th, 61 ms 99.9th.
+producer-metrics:batch-size-avg:{client-id=perf-producer-client}                                                   : 87929.413
+producer-metrics:bufferpool-wait-ratio:{client-id=perf-producer-client}                                            : 0.000
+producer-metrics:outgoing-byte-rate:{client-id=perf-producer-client}                                               : 3404116.739
+producer-metrics:record-queue-time-avg:{client-id=perf-producer-client}                                            : 2.616
+producer-metrics:request-latency-avg:{client-id=perf-producer-client}                                              : 13.136
+```
+
+
+### What is the best balance of throughput and latency? (and defend your decision)
+
+
+
+
+### Given a batch size of 100,000 Bytes, what linger time gives best performance? What do you notice? What do you wonder?
+-- high throughput and low latency
+
+```bash
+$ kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=100000 linger.ms=0 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+
+1000000 records sent, 371471.025260 records/sec (35.43 MB/sec), 25.82 ms avg latency, 458.00 ms max latency, 21 ms 50th, 59 ms 95th, 74 ms 99th, 100 ms 99.9th.
+producer-metrics:batch-size-avg:{client-id=perf-producer-client}                                                   : 68366.532
+producer-metrics:bufferpool-wait-ratio:{client-id=perf-producer-client}                                            : 0.000
+producer-metrics:outgoing-byte-rate:{client-id=perf-producer-client}                                               : 3400694.168
+producer-metrics:record-queue-time-avg:{client-id=perf-producer-client}                                            : 6.055
+producer-metrics:request-latency-avg:{client-id=perf-producer-client}                                              : 15.964
+```
+
+```bash
+$ kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=100000 linger.ms=100 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+
+1000000 records sent, 457456.541629 records/sec (43.63 MB/sec), 19.35 ms avg latency, 412.00 ms max latency, 13 ms 50th, 55 ms 95th, 94 ms 99th, 109 ms 99.9th.
+producer-metrics:batch-size-avg:{client-id=perf-producer-client}                                                   : 95816.079
+producer-metrics:bufferpool-wait-ratio:{client-id=perf-producer-client}                                            : 0.000
+producer-metrics:outgoing-byte-rate:{client-id=perf-producer-client}                                               : 3445442.055
+producer-metrics:record-queue-time-avg:{client-id=perf-producer-client}                                            : 5.577
+producer-metrics:request-latency-avg:{client-id=perf-producer-client}                                              : 13.222
+```
+
+bigger `linger.ms` decreases the throughput
+
+```bash
+$ kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=100000 linger.ms=200 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+
+1000000 records sent, 381533.765738 records/sec (36.39 MB/sec), 17.20 ms avg latency, 432.00 ms max latency, 10 ms 50th, 49 ms 95th, 62 ms 99th, 92 ms 99.9th.
+producer-metrics:batch-size-avg:{client-id=perf-producer-client}                                                   : 94743.494
+producer-metrics:bufferpool-wait-ratio:{client-id=perf-producer-client}                                            : 0.000
+producer-metrics:outgoing-byte-rate:{client-id=perf-producer-client}                                               : 3403131.408
+producer-metrics:record-queue-time-avg:{client-id=perf-producer-client}                                            : 4.221
+producer-metrics:request-latency-avg:{client-id=perf-producer-client}                                              : 13.057
+```
+
+
+### Given a linger time of 500 ms, what batch size gives best performance? What do you notice? What do you wonder?
+-- high throughput and low latency
+
+```bash
+$ kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=16384 linger.ms=500 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+
+1000000 records sent, 241429.261226 records/sec (23.02 MB/sec), 452.47 ms avg latency, 802.00 ms max latency, 544 ms 50th, 765 ms 95th, 789 ms 99th, 797 ms 99.9th.
+producer-metrics:batch-size-avg:{client-id=perf-producer-client}                                                   : 16254.801
+producer-metrics:bufferpool-wait-ratio:{client-id=perf-producer-client}                                            : 0.000
+producer-metrics:outgoing-byte-rate:{client-id=perf-producer-client}                                               : 3253453.424
+producer-metrics:record-queue-time-avg:{client-id=perf-producer-client}                                            : 436.571
+producer-metrics:request-latency-avg:{client-id=perf-producer-client}                                              : 15.358
+```
+
+```bash
+$ kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=400000 linger.ms=500 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+
+1000000 records sent, 582072.176950 records/sec (55.51 MB/sec), 15.08 ms avg latency, 479.00 ms max latency, 10 ms 50th, 36 ms 95th, 59 ms 99th, 78 ms 99.9th.
+producer-metrics:batch-size-avg:{client-id=perf-producer-client}                                                   : 369128.010
+producer-metrics:bufferpool-wait-ratio:{client-id=perf-producer-client}                                            : 0.000
+producer-metrics:outgoing-byte-rate:{client-id=perf-producer-client}                                               : 3496204.430
+producer-metrics:record-queue-time-avg:{client-id=perf-producer-client}                                            : 5.624
+producer-metrics:request-latency-avg:{client-id=perf-producer-client}                                              : 10.721
+```
+
+
+
+
+
+```bash
+$ kafka-producer-perf-test \
+--topic performance \
+--num-records 1000000 \
+--record-size 100 \
+--throughput 10000000 \
+--producer-props bootstrap.servers=$BOOTSTRAPS acks=all batch.size=400000 linger.ms=500 \
+--print-metrics | grep -E "(^1000000 records sent|^producer-metrics:outgoing-byte-rate|^producer-metrics:bufferpool-wait-ratio|^producer-metrics:record-queue-time-avg|^producer-metrics:request-latency-avg|^producer-metrics:batch-size-avg)"
+```
+
+
+
 
 
 
