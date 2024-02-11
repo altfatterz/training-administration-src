@@ -89,23 +89,58 @@ $ kafka-dump-log --print-data-log --files /var/lib/kafka/data/__consumer_offsets
 $ kafka-run-class kafka.tools.ConsumerOffsetChecker --topic replicated-topic
 ```
 
+### kafka-consumer-groups
+
 ```bash
 $ kafka-consumer-groups --bootstrap-server $BOOTSTRAPS --list
 $ kafka-consumer-groups --bootstrap-server $BOOTSTRAPS --describe --group 
+$ kafka-consumer-groups --bootstrap-server=$BOOTSTRAPS --describe --group console-consumer-42894
 ```
+
+### kafka-metadata-quorum
 
 ```bash
 $ kafka-metadata-quorum --bootstrap-server $BOOTSTRAPS describe --status
 ```
 
 ```bash
-$ kafka-rebalance-cluster --bootstrap-server kafka-1:9092 --status
+$ kafka-metadata-quorum --bootstrap-server kafka-1:9092 describe --replication
+
+NodeId	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTimestamp	Status
+9991  	2319        	0  	1706715517260     	1706715517260        	Leader
+9992  	2319        	0  	1706715516927     	1706715516927        	Follower
+9993  	2319        	0  	1706715516927     	1706715516927        	Follower
+1     	2319        	0  	1706715516926     	1706715516926        	Observer
+2     	2319        	0  	1706715516926     	1706715516926        	Observer
+3     	2319        	0  	1706715516926     	1706715516926        	Observer
 ```
+
+### kafka-metadata-shell
 
 ```bash
 $ kafka-metadata-shell --cluster-id $CLUSTERID --controllers $CONTROLLERS
 $ kafka-metadata-shell --cluster-id $CLUSTERID --controllers $CONTROLLERS ls image/cluster
 $ kafka-metadata-shell --cluster-id $CLUSTERID --controllers $CONTROLLERS ls image/topics/byName
+```
+
+### kafka-broker-api-versions
+
+```bash
+$ kafka-broker-api-versions --bootstrap-server kafka-1:9092 --version
+```
+
+### kafka-transactions
+
+```bash
+$ kafka-transactions --bootstrap-server kafka-1:9092 list
+TransactionalId              	Coordinator	ProducerId	TransactionState
+connect-cluster-kafka-connect	2          	1010      	CompleteCommit
+```
+
+### kafka-rebalance-cluster
+
+```bash
+$ kafka-rebalance-cluster --bootstrap-server kafka-1:9092 --status
 ```
 
 
