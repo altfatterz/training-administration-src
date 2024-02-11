@@ -24,6 +24,8 @@ $ echo $CONTROLLERS
 $ echo $BOOTSTRAPS 
 ```
 
+### Durability 
+
 ```bash
 $ kafka-topics \
 --create \
@@ -59,45 +61,37 @@ $ cat /var/lib/kafka/data/replicated-topic-0/leader-epoch-checkpoint
 
 ```bash
 $ kafka-dump-log --print-data-log --files /var/lib/kafka/data/replicated-topic-0/00000000000000000000.log
+$ kafka-dump-log --print-data-log --files /var/lib/kafka/data/replicated-topic-0/00000000000000000000.index
+$ kafka-dump-log --print-data-log --files /var/lib/kafka/data/replicated-topic-0/00000000000000000000.timeindex
+$ kafka-dump-log --print-data-log --files /var/lib/kafka/data/replicated-topic-0/00000000000000000000.snapshot
+
+$ kafka-run-class kafka.tools.DumpLogSegments --files /var/lib/kafka/data/replicated-topic-0/00000000000000000000.log
+$ kafka-run-class kafka.tools.DumpLogSegments --files /var/lib/kafka/data/replicated-topic-0/00000000000000000000.index
+$ kafka-run-class kafka.tools.DumpLogSegments --files /var/lib/kafka/data/replicated-topic-0/00000000000000000000.timeindex
+$ kafka-run-class kafka.tools.DumpLogSegments --files /var/lib/kafka/data/replicated-topic-0/00000000000000000000.snapshot
+```
+
+Produce more records:
+
+```bash
+$ kafka-producer-perf-test --topic replicated-topic --num-records 100000 --record-size 100 --throughput 1000 --producer-props bootstrap.servers=$BOOTSTRAPS
+```
+
+Check the value of `replication-offset-checkpoint` (high water mark) and `recovery-point-offset-checkpoint` (offset up to which is flushed to disk)
+
+```bash
+$ cat replication-offset-checkpoint | grep replicated-topic
+$ cat recovery-point-offset-checkpoint | grep replicated-topic
 ```
 
 ```bash
-$ kafka-run-class kafka.tools.DumpLogSegments --files /var/lib/kafka/data/replicated-topic-1/00000000000000000000.index
-
-offset: 35 position: 4329
-offset: 65 position: 8440
-offset: 98 position: 12599
-offset: 129 position: 16819
-offset: 161 position: 21161
-offset: 192 position: 25394
-offset: 225 position: 29518
-offset: 254 position: 33799
-offset: 286 position: 38032
-offset: 315 position: 42265
-offset: 348 position: 46472
+$ kafka-dump-log --print-data-log --files /var/lib/kafka/data/__consumer_offsets-3/00000000000000000000.log
+$ kafka-run-class kafka.tools.ConsumerOffsetChecker --topic replicated-topic
 ```
 
 ```bash
-$ kafka-run-class kafka.tools.DumpLogSegments --files /var/lib/kafka/data/replicated-topic-1/00000000000000000000.timeindex
-
-timestamp: 1706471402969 offset: 35
-timestamp: 1706471402999 offset: 65
-timestamp: 1706471403032 offset: 98
-timestamp: 1706471403552 offset: 129
-timestamp: 1706471403584 offset: 161
-timestamp: 1706471403615 offset: 192
-timestamp: 1706471403648 offset: 225
-timestamp: 1706471403677 offset: 254
-timestamp: 1706471403709 offset: 286
-timestamp: 1706471403744 offset: 315
-timestamp: 1706471403772 offset: 347
-timestamp: 1706471404037 offset: 371
-```
-
-```bash
-$ kafka-run-class kafka.tools.DumpLogSegments --files /var/lib/kafka/data/replicated-topic-1/00000000000000000372.snapshot
-
-producerId: 1004 producerEpoch: 0 coordinatorEpoch: -1 currentTxnFirstOffset: OptionalLong.empty lastTimestamp: 1706471404037 firstSequence: 370 lastSequence: 371 lastOffset: 371 offsetDelta: 1 timestamp: 1706471404037
+$ kafka-consumer-groups --bootstrap-server $BOOTSTRAPS --list
+$ kafka-consumer-groups --bootstrap-server $BOOTSTRAPS --describe --group 
 ```
 
 ```bash
@@ -106,6 +100,12 @@ $ kafka-metadata-quorum --bootstrap-server $BOOTSTRAPS describe --status
 
 ```bash
 $ kafka-rebalance-cluster --bootstrap-server kafka-1:9092 --status
+```
+
+```bash
+$ kafka-metadata-shell --cluster-id $CLUSTERID --controllers $CONTROLLERS
+$ kafka-metadata-shell --cluster-id $CLUSTERID --controllers $CONTROLLERS ls image/cluster
+$ kafka-metadata-shell --cluster-id $CLUSTERID --controllers $CONTROLLERS ls image/topics/byName
 ```
 
 
@@ -118,6 +118,15 @@ log.dirs=/var/lib/kafka
 $ kafka-consumer-groups --bootstrap-server=$BOOTSTRAPS --list
 $ kafka-consumer-groups --bootstrap-server=$BOOTSTRAPS --describe --group console-consumer-42894
 ```
+
+### __consumer_offsets
+
+- has 50 partitions, replication factor 3
+
+### __cluster_metadata
+
+- has 1 partition
+
 
 ### Secure cluster
 
@@ -346,7 +355,44 @@ $ kafka-producer-perf-test \
 ```
 
 
+### Durability
 
+- refers to the continued persistence of data without any data loss.
+
+### Availability
+
+-  the system uptime, i.e., the percentage of time the system is available and operational, allowing data to be written and read.
+
+### Under replicated partitions
+
+- This measurement, provided on each broker in a cluster, gives a count of the number of partitions for which the broker is the leader replica, where the follower replicas are not caught up. A high number may indicate a high load on the system.
+
+### OfflinePartitionsCount:
+
+- Number of partitions that are offline (which is not good for availability)
+
+
+### Zero-Copy Transfer
+
+A common data transfer from file to socket might go as follows:
+
+1. The OS reads data from the disk into pagecache in the kernel space
+2. The application reads the data from kernel space into a user-space buffer
+3. The application writes the data back into kernel space into a socket buffer
+4. The OS copies the data from the socket buffer to the NIC buffer, where it is sent over the network
+
+However, if we have the same standardized format for data which doesn’t require modification, 
+then we have no need for step 2 (copying the data from kernel space to user-space).
+
+If we keep data in the same format as it will be sent over the network, 
+then we can directly copy data from pagecache to NIC buffer.
+
+### vmtouch - cannot install on Kafka node :(
+
+```bash
+$ $ apt-get update
+$ $ apt-get install -y vmtouch
+```
 
 
 
