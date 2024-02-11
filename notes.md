@@ -1,3 +1,5 @@
+Kafka Options explorer: https://www.conduktor.io/kafka/kafka-options-explorer/
+
 ```bash
 $ docker compose exec tools bash
 ```
@@ -162,6 +164,111 @@ $ kafka-consumer-groups --bootstrap-server=$BOOTSTRAPS --describe --group consol
 
 - has 1 partition
 
+### Managing a Kafka cluster
+
+```bash
+$ cat /etc/kafka/kafka.properties
+
+confluent.metrics.reporter.bootstrap.servers=kafka-1:9092,kafka-2:9092,kafka-3:9092
+inter.broker.listener.name=DOCKER
+jmx.port=10001
+process.roles=broker
+controller.listener.names=CONTROLLER
+metric.reporters=io.confluent.metrics.reporter.ConfluentMetricsReporter
+group.initial.rebalance.delay.ms=0
+controller.quorum.voters=9991@controller-1:19093,9992@controller-2:29093,9993@controller-3:39093
+jmx.hostname=localhost
+node.id=1
+advertised.listeners=DOCKER://kafka-1:9092, EXTERNAL://kafka-1:19092
+listener.security.protocol.map=CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,EXTERNAL:PLAINTEXT
+broker.rack=rack-0
+listeners=DOCKER://kafka-1:9092, EXTERNAL://kafka-1:19092
+zookeeper.connect=
+log.dirs=/var/lib/kafka/data
+confluent.balancer.enable=true
+```
+
+```bash
+$ kafka-configs --bootstrap-server kafka-1:9092 --broker 1 --describe
+$ kafka-configs --bootstrap-server kafka-1:9092 --broker 1 --describe --all
+$ kafka-configs --bootstrap-server kafka-1:9092 --broker 1 --describe --all | grep min.insync.replicas
+$ kafka-configs --bootstrap-server kafka-1:9092 --broker 1 --describe --all | grep log.cleaner.threads
+$ kafka-configs --bootstrap-server kafka-1:9092 --broker-defaults --alter --add-config log.cleaner.threads=2
+$ kafka-configs --bootstrap-server kafka-1:9092 --broker 1 --alter --add-config log.cleaner.threads=3
+$ kafka-configs --bootstrap-server kafka-1:9092 --broker 1 --alter --delete-config log.cleaner.threads
+$ kafka-configs --bootstrap-server kafka-1:9092 --broker 1 --describe --all | grep log.cleaner.threads
+
+$ kafka-topics --bootstrap-server kafka-1:9092 --create --topic my_topic --partitions 1 --replication-factor 3 --config segment.bytes=1000000
+$ kafka-configs --bootstrap-server kafka-1:9092 --describe -topic my_topic
+$ kafka-configs --bootstrap-server kafka-1:9092 --alter --topic my_topic --add-config segment.bytes=1000000
+$ kafka-configs --bootstrap-server kafka-1:9092 --alter --topic my_topic --delete-config segment.bytes
+$ kafka-configs --bootstrap-server kafka-1:9092 --describe -topic my_topic --all
+$ kafka-topics --bootstrap-server kafka-1:9092 --describe --topic my_topic
+
+$ kafka-topics --bootstrap-server kafka-1:9092 --delete --topic my_topic
+```
+
+Order of precedence:
+- topic settings
+- dynamic broker config
+- dynamic cluster-wide config
+- static server config in server.properties
+- kafka default
+
+```bash
+$ kafka-topics --bootstrap-server $BOOTSTRAPS --create --topic test --partitions 3 --replication-factor 1
+$ kafka-topics --bootstrap-server $BOOTSTRAPS --describe --topic test
+$ cat << EOF > replicate_topic_test_plan.json
+{"version":1,
+"partitions":[
+{"topic":"test","partition":0,"replicas":[1,2,3]},
+{"topic":"test","partition":1,"replicas":[1,2,3]},
+{"topic":"test","partition":2,"replicas":[2,3]}]
+}
+EOF
+$ kafka-reassign-partitions --bootstrap-server $BOOTSTRAPS --reassignment-json-file replicate_topic_test_plan.json --verify
+$ kafka-reassign-partitions --bootstrap-server $BOOTSTRAPS --reassignment-json-file replicate_topic_test_plan.json --execute
+$ kafka-topics --bootstrap-server $BOOTSTRAPS --describe --topic test   
+```
+
+### Managing a Kafka cluster
+
+```bash
+$ kafka-topics --bootstrap-server $BOOTSTRAPS --create --topic moving --replica-assignment 1:2,2:1,1:2,2:1,1:2,2:1
+$ kafka-topics --bootstrap-server $BOOTSTRAPS --describe --topic moving
+
+$ confluent-rebalancer execute --bootstrap-server $BOOTSTRAPS --metrics-bootstrap-server $BOOTSTRAPS --throttle 1000000 --verbose
+$ confluent-rebalancer status --bootstrap-server $BOOTSTRAPS
+
+// show throttling configs
+$ kafka-configs --bootstrap-server $BOOTSTRAPS --describe --topic moving
+$ kafka-configs --bootstrap-server $BOOTSTRAPS --describe --entity-type brokers
+```
+
+
+### Consumer groups
+
+```bash
+$ kafka-topics --bootstrap-server $BOOTSTRAPS --create --topic grow-topic --partitions 6 --replication-factor 3
+$ kafka-console-producer --bootstrap-server $BOOTSTRAPS --topic grow-topic
+$ kafka-console-consumer --consumer-property group.id=test-consumer-group --from-beginning --topic grow-topic --bootstrap-server $BOOTSTRAPS
+$ kafka-consumer-groups --bootstrap-server $BOOTSTRAPS --group test-consumer-group --describe
+
+$ kafka-topics --bootstrap-server $BOOTSTRAPS --alter --topic grow-topic --partitions 12
+$ kafka-topics --bootstrap-server $BOOTSTRAPS --describe --topic grow-topic
+// wait 5 minutes
+$ kafka-consumer-groups --bootstrap-server $BOOTSTRAPS --group test-consumer-group --describe
+```
+
+```bash
+$ kafka-console-producer --bootstrap-server $BOOTSTRAPS --topic new-topic
+$ kafka-console-consumer  --from-beginning --topic new-topic --group new-group --bootstrap-server $BOOTSTRAPS
+
+$ kafka-console-consumer --topic __consumer_offsets --bootstrap-server $BOOTSTRAPS \
+--formatter "kafka.coordinator.group.GroupMetadataManager\$OffsetsMessageFormatter" | grep new-topic
+
+[new-group,new-topic,0]::OffsetAndMetadata(offset=3, leaderEpoch=Optional[0], metadata=, commitTimestamp=1707684378509, expireTimestamp=None)
+```
 
 ### Secure cluster
 
