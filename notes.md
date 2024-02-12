@@ -537,6 +537,14 @@ $ $ apt-get install -y vmtouch
 ```
 
 
+### Confluent for Kubernetes
+
+https://docs.confluent.io/operator/current/overview.html
+
+https://github.com/confluentinc/confluent-kubernetes-examples
+
+
+
 
 References:
 
